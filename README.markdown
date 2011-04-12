@@ -60,6 +60,12 @@ Error handling
 
 phpredis throws a `RedisException` object if it can't reach the Redis server. That can happen in case of connectivity issues, if the Redis service is down, or if the redis host is overloaded. In any other problematic case that does not involve an unreachable server (such as a key not existing, an invalid command, etc), phpredis will return `FALSE`.
 
+Igbinary
+==============
+
+phpredis supports Igbinary serialization when configured with `--enable-redis-igbinary`. Igbinary can be installed from PECL: `sudo pecl install igbinary`. Igbinary is much more efficient than the standard PHP `serialize()`.
+
+
 Methods
 =========
 
@@ -151,7 +157,7 @@ Set client option.
 <pre>
 $redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_NONE);	// don't serialize data
 $redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_PHP);	// use built-in serialize/unserialize
-$redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_IGBINARY);	// use igBinary serialize/unserialize
+$redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_IGBINARY);	// use Igbinary serialize/unserialize, only if enabled in `.configure` script.
 
 $redis->setOption(Redis::OPT_PREFIX, 'myAppName:');	// use custom prefix on all keys
 </pre>
