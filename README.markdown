@@ -1,6 +1,6 @@
 PhpRedis
 =============
-The phpredis extension provides an API for communicating with the [Redis](http://redis.io/) key-value store.
+The phpredis extension provides an API for communicating with the [Redis](http://redis.io/) key-value store. It is released under the [PHP License, version 3.01](http://www.php.net/license/3_01.txt).
 This code has been developed and maintained by Owlient from November 2009 to March 2011.
 
 You can send comments, patches, questions [here on github](https://github.com/nicolasff/phpredis/issues) or to n.favrefelix@gmail.com ([@yowgi](http://twitter.com/yowgi)).
@@ -115,7 +115,7 @@ So be patient on to many open FD's (specially on redis server side) when using p
 connections on many servers connecting to one redis server.
 
 Also more than one persistent connection can be made identified by either host + port + timeout
-or unix socket + timeout.
+or host + persistent_id or unix socket + timeout.
 
 This feature is not available in threaded versions. `pconnect` and `popen` then working like their non
 persistent equivalents.
@@ -125,6 +125,7 @@ persistent equivalents.
 *host*: string. can be a host, or the path to a unix domain socket  
 *port*: int, optional  
 *timeout*: float, value in seconds (optional, default is 0 meaning unlimited)  
+*persistent_id*: string. identity for the requested persistent connection
 
 ##### *Return Value*
 
@@ -135,8 +136,9 @@ persistent equivalents.
 <pre>
 $redis->pconnect('127.0.0.1', 6379);
 $redis->pconnect('127.0.0.1'); // port 6379 by default - same connection like before.
-$redis->pconnect('127.0.0.1', 6379, 2.5); // 2.5 sec timeout and would be another connection then the two before.
-$redis->pconnect('/tmp/redis.sock'); // unix domain socket - would be another connection then the three before.
+$redis->pconnect('127.0.0.1', 6379, 2.5); // 2.5 sec timeout and would be another connection than the two before.
+$redis->pconnect('127.0.0.1', 6379, 2.5, 'x'); // x is sent as persistent_id and would be another connection the the three before.
+$redis->pconnect('/tmp/redis.sock'); // unix domain socket - would be another connection than the four before.
 </pre>
 
 ## close
