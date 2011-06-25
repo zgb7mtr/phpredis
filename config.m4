@@ -8,6 +8,10 @@ dnl Make sure that the comment is aligned:
 PHP_ARG_ENABLE(redis-igbinary, whether to enable igbinary serializer support,
 [  --enable-redis-igbinary      Enable igbinary serializer support], no, no)
 
+PHP_ARG_ENABLE(redis-session, whether to enable sessions,
+[  --disable-redis-session      Disable session support], yes, no)
+
+
 if test "$PHP_REDIS" != "no"; then
   if test "$PHP_REDIS_IGBINARY" != "no"; then
     AC_MSG_CHECKING([for igbinary includes])
@@ -46,6 +50,10 @@ if test "$PHP_REDIS" != "no"; then
   else
     IGBINARY_INCLUDES=""
     AC_MSG_RESULT([disabled])
+  fi
+
+  if test "$PHP_REDIS_SESSION" != "no"; then
+    AC_DEFINE(PHP_SESSION,1,[redis sessions])
   fi
 
   dnl # --with-redis -> check with-path
