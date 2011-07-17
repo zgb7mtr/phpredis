@@ -96,6 +96,7 @@ PHP_METHOD(Redis, auth);
 PHP_METHOD(Redis, ttl);
 PHP_METHOD(Redis, persist);
 PHP_METHOD(Redis, info);
+PHP_METHOD(Redis, resetStat);
 PHP_METHOD(Redis, select);
 PHP_METHOD(Redis, move);
 PHP_METHOD(Redis, zAdd);
@@ -190,9 +191,10 @@ PHPAPI void set_pipeline_head(zval *object, request_item *head);
 PHPAPI request_item* get_pipeline_current(zval *object);
 PHPAPI void set_pipeline_current(zval *object, request_item *current);
 
+#ifndef _MSC_VER
 ZEND_BEGIN_MODULE_GLOBALS(redis)
 ZEND_END_MODULE_GLOBALS(redis)
-
+#endif
 
 struct redis_queued_item {
 
