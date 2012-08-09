@@ -190,7 +190,7 @@ PHP_METHOD(RedisArray, __construct)
 	char *name = NULL;
 	int id;
 	RedisArray *ra = NULL;
-	zend_bool b_index = 0, b_autorehash = 0;
+	zend_bool b_index = 0, b_autorehash = 0, b_pconnect = 0;
 	HashTable *hPrev = NULL, *hOpts = NULL;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z|a", &z0, &z_opts) == FAILURE) {
@@ -232,6 +232,11 @@ PHP_METHOD(RedisArray, __construct)
 		if(FAILURE != zend_hash_find(hOpts, "autorehash", sizeof("autorehash"), (void**)&zpData) && Z_TYPE_PP(zpData) == IS_BOOL) {
 			b_autorehash = Z_BVAL_PP(zpData);
 		}
+
+		/* extract pconnect option. */
+		if(FAILURE != zend_hash_find(hOpts, "pconnect", sizeof("pconnect"), (void**)&zpData) && Z_TYPE_PP(zpData) == IS_BOOL) {
+			b_pconnect = Z_BVAL_PP(zpData);
+		}
 	}
 
 	/* extract either name of list of hosts from z0 */
@@ -241,7 +246,7 @@ PHP_METHOD(RedisArray, __construct)
 			break;
 
 		case IS_ARRAY:
-			ra = ra_make_array(Z_ARRVAL_P(z0), z_fun, z_dist, hPrev, b_index TSRMLS_CC);
+			ra = ra_make_array(Z_ARRVAL_P(z0), z_fun, z_dist, hPrev, b_index, b_pconnect TSRMLS_CC);
 			break;
 
 		default:

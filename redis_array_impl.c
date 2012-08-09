@@ -67,7 +67,7 @@ ra_load_hosts(RedisArray *ra, HashTable *hosts TSRMLS_DC)
 		call_user_function(&redis_ce->function_table, &ra->redis[i], &z_cons, &z_ret, 0, NULL TSRMLS_CC);
 
 		/* create socket */
-		redis_sock = redis_sock_create(host, host_len, port, 0, 0, NULL); /* TODO: persistence? */
+		redis_sock = redis_sock_create(host, host_len, port, 0, ra->pconnect, NULL); /* TODO: persistence? */
 
 		/* connect */
 		redis_sock_server_open(redis_sock, 1 TSRMLS_CC);
@@ -157,9 +157,10 @@ RedisArray *ra_load_array(const char *name TSRMLS_DC) {
 	zval *z_params_funs, **z_data_pp, *z_fun = NULL, *z_dist = NULL;
 	zval *z_params_index;
 	zval *z_params_autorehash;
+	zval *z_params_pconnect;
 	RedisArray *ra = NULL;
 
-	zend_bool b_index = 0, b_autorehash = 0;
+	zend_bool b_index = 0, b_autorehash = 0, b_pconnect;
 	HashTable *hHosts = NULL, *hPrev = NULL;
 
 	/* find entry */
@@ -222,8 +223,18 @@ RedisArray *ra_load_array(const char *name TSRMLS_DC) {
 		}
 	}
 
+	/* pconnect option */
+	MAKE_STD_ZVAL(z_params_pconnect);
+	array_init(z_params_pconnect);
+	sapi_module.treat_data(PARSE_STRING, estrdup(INI_STR("redis.arrays.pconnect")), z_params_pconnect TSRMLS_CC);
+	if (zend_hash_find(Z_ARRVAL_P(z_params_pconnect), name, strlen(name) + 1, (void**) &z_data_pp) != FAILURE) {
+		if(Z_TYPE_PP(z_data_pp) == IS_STRING && strncmp(Z_STRVAL_PP(z_data_pp), "1", 1) == 0) {
+			b_pconnect = 1;
+		}
+	}
+
 	/* create RedisArray object */
-	ra = ra_make_array(hHosts, z_fun, z_dist, hPrev, b_index TSRMLS_CC);
+	ra = ra_make_array(hHosts, z_fun, z_dist, hPrev, b_index, b_pconnect TSRMLS_CC);
 	ra->auto_rehash = b_autorehash;
 
 	/* cleanup */
@@ -242,7 +253,7 @@ RedisArray *ra_load_array(const char *name TSRMLS_DC) {
 }
 
 RedisArray *
-ra_make_array(HashTable *hosts, zval *z_fun, zval *z_dist, HashTable *hosts_prev, zend_bool b_index TSRMLS_DC) {
+ra_make_array(HashTable *hosts, zval *z_fun, zval *z_dist, HashTable *hosts_prev, zend_bool b_index, zend_bool b_pconnect TSRMLS_DC) {
 
 	int count = zend_hash_num_elements(hosts);
 
@@ -256,6 +267,7 @@ ra_make_array(HashTable *hosts, zval *z_fun, zval *z_dist, HashTable *hosts_prev
 	ra->z_multi_exec = NULL;
 	ra->index = b_index;
 	ra->auto_rehash = 0;
+	ra->pconnect = b_pconnect;
 
 	/* init array data structures */
 	ra_init_function_table(ra);
@@ -263,7 +275,7 @@ ra_make_array(HashTable *hosts, zval *z_fun, zval *z_dist, HashTable *hosts_prev
 	if(NULL == ra_load_hosts(ra, hosts TSRMLS_CC)) {
 		return NULL;
 	}
-	ra->prev = hosts_prev ? ra_make_array(hosts_prev, z_fun, z_dist, NULL, b_index TSRMLS_CC) : NULL;
+	ra->prev = hosts_prev ? ra_make_array(hosts_prev, z_fun, z_dist, NULL, b_index, b_pconnect TSRMLS_CC) : NULL;
 
 	/* copy function if provided */
 	if(z_fun) {
