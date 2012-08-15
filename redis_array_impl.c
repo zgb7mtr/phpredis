@@ -35,7 +35,7 @@ ra_load_hosts(RedisArray *ra, HashTable *hosts TSRMLS_DC)
 	int count = zend_hash_num_elements(hosts);
 	char *host, *p;
 	short port;
-	zval **zpData, z_cons, *z_args, z_ret;
+	zval **zpData, z_cons, z_ret;
 	RedisSock *redis_sock  = NULL;
 
 	/* function calls on the Redis object */
@@ -58,6 +58,8 @@ ra_load_hosts(RedisArray *ra, HashTable *hosts TSRMLS_DC)
 		if((p = strchr(host, ':'))) { /* found port */
 			host_len = p - host;
 			port = (short)atoi(p+1);
+		} else if(strchr(host,'/') != NULL) { /* redis socket */
+			port = -1;
 		}
 
 		/* create Redis object */
@@ -67,7 +69,7 @@ ra_load_hosts(RedisArray *ra, HashTable *hosts TSRMLS_DC)
 		call_user_function(&redis_ce->function_table, &ra->redis[i], &z_cons, &z_ret, 0, NULL TSRMLS_CC);
 
 		/* create socket */
-		redis_sock = redis_sock_create(host, host_len, port, 0, ra->pconnect, NULL); /* TODO: persistence? */
+		redis_sock = redis_sock_create(host, host_len, port, 0, ra->pconnect, NULL);
 
 		/* connect */
 		redis_sock_server_open(redis_sock, 1 TSRMLS_CC);
