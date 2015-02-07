@@ -415,7 +415,8 @@ static void redis_destructor_redis_sock(zend_rsrc_list_entry * rsrc TSRMLS_DC)
 /**
  * redis_sock_get
  */
-PHP_REDIS_API int redis_sock_get(zval *id, RedisSock **redis_sock TSRMLS_DC, int no_throw)
+PHP_REDIS_API int redis_sock_get(zval *id, RedisSock **redis_sock TSRMLS_DC, 
+                                 int no_throw, int is_local)
 {
 
     zval **socket;
@@ -439,7 +440,11 @@ PHP_REDIS_API int redis_sock_get(zval *id, RedisSock **redis_sock TSRMLS_DC, int
     	}
 		return -1;
     }
-    if ((*redis_sock)->lazy_connect)
+
+    /* If we're set up to lazy connect, and this method needs a connection then
+     * connect now.  Otherwise it could be an introspection method which doesn't
+     * need to connect to the server (e.g. getOption/setOption) */
+    if ((*redis_sock)->lazy_connect && !is_local)
     {
         (*redis_sock)->lazy_connect = 0;
         if (redis_sock_server_open(*redis_sock, 1 TSRMLS_CC) < 0) {
@@ -460,7 +465,7 @@ PHP_REDIS_API RedisSock *redis_sock_get_connected(INTERNAL_FUNCTION_PARAMETERS) 
 
     /* If we can't grab our object, or get a socket, or we're not connected, return NULL */
     if((zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, redis_ce) == FAILURE) ||
-       (redis_sock_get(object, &redis_sock TSRMLS_CC, 1) < 0) || redis_sock->status != REDIS_SOCK_STATUS_CONNECTED)
+       (redis_sock_get(object, &redis_sock TSRMLS_CC, 1, 1) < 0) || redis_sock->status != REDIS_SOCK_STATUS_CONNECTED)
     {
         return NULL;
     }
@@ -604,7 +609,7 @@ PHP_METHOD(Redis,__destruct) {
 	}
 
 	/* Grab our socket */
-	if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 1) < 0) {
+	if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 1, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -637,7 +642,7 @@ PHP_METHOD(Redis, pconnect)
 	} else {
 		/* reset multi/exec state if there is one. */
 		RedisSock *redis_sock;
-		if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0) < 0) {
+		if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0, 0) < 0) {
 			RETURN_FALSE;
 		}
 
@@ -687,7 +692,7 @@ PHP_REDIS_API int redis_connect(INTERNAL_FUNCTION_PARAMETERS, int persistent) {
 	}
 
 	/* if there is a redis sock already we have to remove it from the list */
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 1) > 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 1, 0) > 0) {
 		if (zend_hash_find(Z_OBJPROP_P(object), "socket",
 					sizeof("socket"), (void **) &socket) == FAILURE)
 		{
@@ -730,7 +735,7 @@ PHP_METHOD(Redis, bitop)
 	int key_free = 0;
 
 	/* get redis socket */
-    if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -817,7 +822,7 @@ PHP_METHOD(Redis, bitcount)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -853,7 +858,7 @@ PHP_METHOD(Redis, bitpos)
         RETURN_FALSE;
     }
 
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -900,7 +905,7 @@ PHP_METHOD(Redis, close)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -931,7 +936,7 @@ PHP_METHOD(Redis, set) {
     }
 
     /* Ensure we can grab our redis socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1029,7 +1034,7 @@ PHP_REDIS_API void redis_generic_setex(INTERNAL_FUNCTION_PARAMETERS, char *keywo
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1078,7 +1083,7 @@ PHP_METHOD(Redis, setnx)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1116,7 +1121,7 @@ PHP_METHOD(Redis, getSet)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1150,7 +1155,7 @@ PHP_METHOD(Redis, randomKey)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1181,7 +1186,7 @@ PHP_METHOD(Redis, echo)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1216,7 +1221,7 @@ PHP_METHOD(Redis, renameKey)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1253,7 +1258,7 @@ PHP_METHOD(Redis, renameNx)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1288,7 +1293,7 @@ PHP_METHOD(Redis, get)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1320,7 +1325,7 @@ PHP_METHOD(Redis, ping)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1349,7 +1354,7 @@ PHP_REDIS_API void redis_atomic_increment(INTERNAL_FUNCTION_PARAMETERS, char *ke
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 	key_free = redis_key_prefix(redis_sock, &key, &key_len TSRMLS_CC);
@@ -1427,7 +1432,7 @@ PHP_METHOD(Redis, incrByFloat) {
 		RETURN_FALSE;
 	}
 
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -1507,7 +1512,7 @@ PHP_METHOD(Redis, getMultiple)
     }
 
     /* We'll need the socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1588,7 +1593,7 @@ PHP_METHOD(Redis, exists)
                                      &key, &key_len) == FAILURE) {
         RETURN_FALSE;
     }
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1687,7 +1692,7 @@ PHP_METHOD(Redis, getKeys)
         RETURN_NULL();
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1720,7 +1725,7 @@ PHP_METHOD(Redis, type)
         RETURN_NULL();
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -1750,7 +1755,7 @@ PHP_METHOD(Redis, append)
 		RETURN_NULL();
 	}
 
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -1779,7 +1784,7 @@ PHP_METHOD(Redis, getRange)
 		RETURN_FALSE;
 	}
 
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -1807,7 +1812,7 @@ PHP_METHOD(Redis, setRange)
 		RETURN_FALSE;
 	}
 
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -1835,7 +1840,7 @@ PHP_METHOD(Redis, getBit)
 		RETURN_FALSE;
 	}
 
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -1869,7 +1874,7 @@ PHP_METHOD(Redis, setBit)
 		RETURN_FALSE;
 	}
 
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -1903,7 +1908,7 @@ PHP_METHOD(Redis, strlen)
 		RETURN_NULL();
 	}
 
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -1933,7 +1938,7 @@ generic_push_function(INTERNAL_FUNCTION_PARAMETERS, char *keyword, int keyword_l
         RETURN_NULL();
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2006,7 +2011,7 @@ PHP_METHOD(Redis, lInsert)
 		RETURN_NULL();
 	}
 
-	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -2055,7 +2060,7 @@ generic_pop_function(INTERNAL_FUNCTION_PARAMETERS, char *keyword, int keyword_le
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2145,7 +2150,7 @@ PHP_METHOD(Redis, lSize)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2181,7 +2186,7 @@ PHP_METHOD(Redis, lRemove)
         RETURN_NULL();
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2217,7 +2222,7 @@ PHP_METHOD(Redis, listTrim)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2250,7 +2255,7 @@ PHP_METHOD(Redis, lGet)
         RETURN_NULL();
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2283,7 +2288,7 @@ PHP_METHOD(Redis, lGetRange)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2334,7 +2339,7 @@ PHP_METHOD(Redis, sSize)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2386,7 +2391,7 @@ PHP_METHOD(Redis, sMove)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2433,7 +2438,7 @@ PHP_METHOD(Redis, sRandMember)
     }
 
     /* Get our redis socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2493,7 +2498,7 @@ PHP_METHOD(Redis, sContains)
         return;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2526,7 +2531,7 @@ PHP_METHOD(Redis, sMembers)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -2566,7 +2571,7 @@ PHP_REDIS_API int generic_multiple_args_cmd(INTERNAL_FUNCTION_PARAMETERS, char *
     }
 
 	/* get redis socket */
-    if (redis_sock_get(getThis(), out_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(getThis(), out_sock TSRMLS_CC, 0, 0) < 0) {
 		ZVAL_BOOL(return_value, 0);
 		return FAILURE;
     }
@@ -2890,7 +2895,7 @@ PHP_METHOD(Redis, sort) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3101,7 +3106,7 @@ PHP_REDIS_API void generic_sort_cmd(INTERNAL_FUNCTION_PARAMETERS, char *sort, in
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
     if(key_len == 0) {
@@ -3302,7 +3307,7 @@ PHP_REDIS_API void generic_expire_cmd(INTERNAL_FUNCTION_PARAMETERS, char *keywor
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3367,7 +3372,7 @@ PHP_METHOD(Redis, lSet) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3394,7 +3399,7 @@ PHP_REDIS_API void generic_empty_cmd_impl(INTERNAL_FUNCTION_PARAMETERS, char *cm
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3441,7 +3446,7 @@ PHP_REDIS_API void generic_empty_long_cmd(INTERNAL_FUNCTION_PARAMETERS, char *cm
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3508,7 +3513,7 @@ PHP_METHOD(Redis, auth) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3541,7 +3546,7 @@ PHP_METHOD(Redis, persist) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3569,7 +3574,7 @@ PHP_REDIS_API void generic_ttl(INTERNAL_FUNCTION_PARAMETERS, char *keyword) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3612,7 +3617,7 @@ PHP_METHOD(Redis, info) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3658,7 +3663,7 @@ PHP_METHOD(Redis, select) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3690,7 +3695,7 @@ PHP_METHOD(Redis, move) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3725,7 +3730,7 @@ generic_mset(INTERNAL_FUNCTION_PARAMETERS, char *kw, void (*fun)(INTERNAL_FUNCTI
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3861,7 +3866,7 @@ PHP_METHOD(Redis, rpoplpush)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3885,7 +3890,7 @@ PHP_METHOD(Redis, brpoplpush)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -3912,7 +3917,7 @@ PHP_METHOD(Redis, zAdd) {
 	int argc = ZEND_NUM_ARGS(), i;
 
 	/* get redis socket */
-    if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4012,7 +4017,7 @@ PHP_METHOD(Redis, zRange)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4075,7 +4080,7 @@ PHP_METHOD(Redis, zDeleteRangeByScore)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4108,7 +4113,7 @@ PHP_METHOD(Redis, zDeleteRangeByRank)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4142,7 +4147,7 @@ PHP_METHOD(Redis, zReverseRange)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4195,7 +4200,7 @@ redis_generic_zrange_by_score(INTERNAL_FUNCTION_PARAMETERS, char *keyword) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4301,7 +4306,7 @@ PHP_METHOD(Redis, zCount)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4347,7 +4352,7 @@ PHP_METHOD(Redis, zRangeByLex) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4391,7 +4396,7 @@ PHP_METHOD(Redis, zCard)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4425,7 +4430,7 @@ PHP_METHOD(Redis, zScore)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4458,7 +4463,7 @@ PHP_REDIS_API void generic_rank_method(INTERNAL_FUNCTION_PARAMETERS, char *keywo
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4479,16 +4484,14 @@ PHP_REDIS_API void generic_rank_method(INTERNAL_FUNCTION_PARAMETERS, char *keywo
 /* {{{ proto long Redis::zRank(string key, string member)
  */
 PHP_METHOD(Redis, zRank) {
-
-        generic_rank_method(INTERNAL_FUNCTION_PARAM_PASSTHRU, "ZRANK", 5);
+    generic_rank_method(INTERNAL_FUNCTION_PARAM_PASSTHRU, "ZRANK", 5);
 }
 /* }}} */
 
 /* {{{ proto long Redis::zRevRank(string key, string member)
  */
 PHP_METHOD(Redis, zRevRank) {
-
-        generic_rank_method(INTERNAL_FUNCTION_PARAM_PASSTHRU, "ZREVRANK", 8);
+    generic_rank_method(INTERNAL_FUNCTION_PARAM_PASSTHRU, "ZREVRANK", 8);
 }
 /* }}} */
 
@@ -4508,7 +4511,7 @@ PHP_REDIS_API void generic_incrby_method(INTERNAL_FUNCTION_PARAMETERS, char *key
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4553,7 +4556,7 @@ PHP_REDIS_API void generic_z_command(INTERNAL_FUNCTION_PARAMETERS, char *command
     }
 
     /* We'll need our socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4724,7 +4727,7 @@ generic_hset(INTERNAL_FUNCTION_PARAMETERS, char *kw, void (*fun)(INTERNAL_FUNCTI
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4768,7 +4771,7 @@ PHP_METHOD(Redis, hGet)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 	key_free = redis_key_prefix(redis_sock, &key, &key_len TSRMLS_CC);
@@ -4798,7 +4801,7 @@ PHP_METHOD(Redis, hLen)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -4830,7 +4833,7 @@ generic_hash_command_2(INTERNAL_FUNCTION_PARAMETERS, char *keyword, int keyword_
             return NULL;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
             ZVAL_BOOL(return_value, 0);
             return NULL;
     }
@@ -4891,7 +4894,7 @@ generic_hash_command_1(INTERNAL_FUNCTION_PARAMETERS, char *keyword, int keyword_
             return NULL;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
             ZVAL_BOOL(return_value, 0);
             return NULL;
     }
@@ -4979,7 +4982,7 @@ PHP_METHOD(Redis, hIncrByFloat)
 	}
 
 	/* Grab our socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -5008,7 +5011,7 @@ PHP_METHOD(Redis, hIncrBy)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5056,7 +5059,7 @@ PHP_METHOD(Redis, hMget) {
     }
 
     /* We'll need our socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5140,7 +5143,7 @@ PHP_METHOD(Redis, hMset)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5244,7 +5247,7 @@ PHP_METHOD(Redis, multi)
 
     /* if the flag is activated, send the command, the reply will be "QUEUED" or -ERR */
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5293,7 +5296,7 @@ PHP_METHOD(Redis, discard)
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5395,7 +5398,7 @@ PHP_METHOD(Redis, exec)
                                      &object, redis_ce) == FAILURE) {
         RETURN_FALSE;
     }
-   	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+   	if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
        	RETURN_FALSE;
     }
 
@@ -5494,7 +5497,7 @@ PHP_METHOD(Redis, pipeline)
     }
 
     /* if the flag is activated, send the command, the reply will be "QUEUED" or -ERR */
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 	redis_sock->mode = PIPELINE;
@@ -5526,7 +5529,7 @@ PHP_METHOD(Redis, publish)
         RETURN_NULL();
     }
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5563,7 +5566,7 @@ PHP_REDIS_API void generic_subscribe_cmd(INTERNAL_FUNCTION_PARAMETERS, char *sub
 		RETURN_FALSE;
 	}
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5759,7 +5762,7 @@ PHP_REDIS_API void generic_unsubscribe_cmd(INTERNAL_FUNCTION_PARAMETERS, char *u
 									 &object, redis_ce, &array) == FAILURE) {
 		RETURN_FALSE;
 	}
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5853,7 +5856,7 @@ PHP_METHOD(Redis, slaveof)
 									 &object, redis_ce, &host, &host_len, &port) == FAILURE) {
 		RETURN_FALSE;
 	}
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5884,7 +5887,7 @@ PHP_METHOD(Redis, object)
 									 &object, redis_ce, &info, &info_len, &key, &key_len) == FAILURE) {
 		RETURN_FALSE;
 	}
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -5922,7 +5925,7 @@ PHP_METHOD(Redis, getOption)  {
 		RETURN_FALSE;
 	}
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
         RETURN_FALSE;
     }
 
@@ -5959,7 +5962,7 @@ PHP_METHOD(Redis, setOption) {
 		RETURN_FALSE;
 	}
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
         RETURN_FALSE;
     }
 
@@ -6037,7 +6040,7 @@ PHP_METHOD(Redis, config)
 		RETURN_FALSE;
 	}
 
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -6095,7 +6098,7 @@ PHP_METHOD(Redis, slowlog) {
     }
 
     /* Make sure we can grab our redis socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -6130,7 +6133,7 @@ PHP_METHOD(Redis, rawCommand) {
         RETURN_FALSE;
     }
 
-    if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0, 0) < 0) {
         efree(z_args);
         RETURN_FALSE;
     }
@@ -6182,7 +6185,7 @@ PHP_METHOD(Redis, wait) {
     }
 
     /* Grab our socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0)<0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0)<0) {
         RETURN_FALSE;
     }
 
@@ -6334,7 +6337,7 @@ PHP_METHOD(Redis, pubsub) {
     }
 
     /* Grab our socket context object */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0)<0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0)<0) {
         RETURN_FALSE;
     }
 
@@ -6454,7 +6457,7 @@ PHP_METHOD(Redis, evalsha)
 	}
 
 	/* Attempt to grab socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6487,7 +6490,7 @@ PHP_METHOD(Redis, eval)
 	}
 
 	/* Attempt to grab socket */
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -6537,7 +6540,7 @@ PHP_METHOD(Redis, script) {
 	char *cmd;
 
 	/* Attempt to grab our socket */
-	if(redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(getThis(), &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6607,7 +6610,7 @@ PHP_METHOD(Redis, dump) {
 	}
 
 	/* Grab our socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6638,7 +6641,7 @@ PHP_METHOD(Redis, debug) {
     }
 
     /* Grab our socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0)<0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0)<0) {
         RETURN_FALSE;
     }
 
@@ -6672,7 +6675,7 @@ PHP_METHOD(Redis, restore) {
 	}
 
 	/* Grab our socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6708,7 +6711,7 @@ PHP_METHOD(Redis, migrate) {
 	}
 
 	/* Grabg our socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6759,7 +6762,7 @@ PHP_METHOD(Redis, _prefix) {
 		RETURN_FALSE;
 	}
 	/* Grab socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6790,7 +6793,7 @@ PHP_METHOD(Redis, _serialize) {
     }
 
     /* Grab socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
         RETURN_FALSE;
     }
 
@@ -6817,7 +6820,7 @@ PHP_METHOD(Redis, _unserialize) {
 		RETURN_FALSE;
 	}
 	/* Grab socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6848,7 +6851,7 @@ PHP_METHOD(Redis, getLastError) {
 		RETURN_FALSE;
 	}
 	/* Grab socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6872,7 +6875,7 @@ PHP_METHOD(Redis, clearLastError) {
 		RETURN_FALSE;
 	}
 	/* Grab socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -6898,7 +6901,7 @@ PHP_METHOD(Redis, getMode) {
     }
 
     /* Grab socket */
-    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if (redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
         RETURN_FALSE;
     }
 
@@ -6919,7 +6922,7 @@ PHP_METHOD(Redis, time) {
 		RETURN_FALSE;
 	}
 	/* Grab socket */
-	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+	if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 1) < 0) {
 		RETURN_FALSE;
 	}
 
@@ -7074,7 +7077,7 @@ PHP_METHOD(Redis, client) {
     }
 
     /* Grab our socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -7193,7 +7196,7 @@ generic_scan_cmd(INTERNAL_FUNCTION_PARAMETERS, REDIS_SCAN_TYPE type) {
     }
 
     /* Grab our socket */
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -7297,7 +7300,7 @@ PHP_METHOD(Redis, pfadd) {
         RETURN_FALSE;
     }
 
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -7384,7 +7387,7 @@ PHP_METHOD(Redis, pfcount) {
         RETURN_FALSE;
     }
 
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
@@ -7488,7 +7491,7 @@ PHP_METHOD(Redis, pfmerge) {
         RETURN_FALSE;
     }
 
-    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0) < 0) {
+    if(redis_sock_get(object, &redis_sock TSRMLS_CC, 0, 0) < 0) {
         RETURN_FALSE;
     }
 
